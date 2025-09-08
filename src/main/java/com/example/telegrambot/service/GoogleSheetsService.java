@@ -5,7 +5,7 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.*;
-import com.google.auth.googleapis.GoogleCredentials;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.http.HttpCredentialsAdapter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,10 +27,13 @@ public class GoogleSheetsService {
 
     // Список всех возможных офферов для создания колонок
     private final List<String> ALL_OFFERS = Arrays.asList(
-            "КК", "НС", "ИНВЕСТИЦИИ", "ИНВЕСТ - АВТОСЛЕДОВАНИЕ",
+                    "КК", "НС", "ИНВЕСТИЦИИ", "ИНВЕСТ - АВТОСЛЕДОВАНИЕ",
             "ОБНОВЛЕНИЕ ДАННЫХ", "ЗАЩИТА КАРТЫ", "МП", "СИМ",
-            "КРЕДИТ НАЛИЧНЫМИ", "ДЖУНИОР", "ДК", "PREMIUM",
-            "PRIVATE", "PRO", "СОЦИАЛЬНЫЙ СЧЕТ", "КК+ОПТИМУМ"
+            "SIM MNP", "КРЕДИТ НАЛИЧНЫМИ", "ДЖУНИОР", "ДК",
+            "PREMIUM", "PRIVATE", "PRO", "СОЦИАЛЬНЫЙ СЧЕТ",
+            "КК+ОПТИМУМ", "ПРИВЕДИ ДРУГА", "УТИЛИЗАЦИЯ НС",
+            "РЕФИНАНСИРОВАНИЕ", "ИНВЕСТИЦИИ УТИЛИЗАЦИЯ БС",
+            "МП ИНВЕСТИЦИИ", "СЧЕТ ДЛЯ БИЗНЕСА", "БИЗНЕС КАРТА"
     );
 
     public GoogleSheetsService() {

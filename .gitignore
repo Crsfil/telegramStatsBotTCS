@@ -31,4 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Sensitive Data ###
 src/main/resources/credentials.json
+src/main/resources/application-local.properties
+src/main/resources/application-prod.properties
+*.env
+.env.*
+meetings.json

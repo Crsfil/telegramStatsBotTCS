@@ -4,6 +4,7 @@ import com.example.telegrambot.model.Meeting;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,41 +25,61 @@ public class MessageParserService {
         String offersText = messageText.substring(questionIndex + "мой вопрос:".length()).trim();
 
         if (offersText.isEmpty()) {
-            return new Meeting(LocalDateTime.now(), List.of(), messageText, userId);
+            return new Meeting(LocalDateTime.now(), new ArrayList<String>(), messageText, userId);
         }
 
-        // Разбиваем на строки и очищаем
-        List<String> offers = Arrays.stream(offersText.split("\n"))
-                .map(String::trim)
-                .filter(line -> !line.isEmpty())
-                .map(this::normalizeOffer)
-                .collect(Collectors.toList());
+        // Разбиваем на строки, затем каждую строку на слова
+        List<String> offers = new ArrayList<>();
+
+        String[] lines = offersText.split("\n");
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            if (!trimmedLine.isEmpty()) {
+                // Разбиваем строку на слова по пробелам
+                String[] words = trimmedLine.split("\\s+");
+                for (String word : words) {
+                    String trimmedWord = word.trim();
+                    if (!trimmedWord.isEmpty()) {
+                        offers.add(normalizeOffer(trimmedWord));
+                    }
+                }
+            }
+        }
 
         return new Meeting(LocalDateTime.now(), offers, messageText, userId);
     }
 
     private String normalizeOffer(String offer) {
         // Приводим к верхнему регистру и убираем лишние пробелы
-        String normalized = offer.trim().toUpperCase();
+        String normalized = offer.trim().toLowerCase();
 
         // Алиасы для офферов
         return switch (normalized) {
-            case "КРЕДИТКА", "КРЕДИТНАЯ КАРТА" -> "КК";
-            case "НАКОПИТЕЛЬНЫЙ", "НАКОПИТЕЛЬНЫЙ СЧЕТ", "НС", "СЧЕТ" -> "НС";
-            case "БРОКЕРСКИЙ", "БРОКЕРСКИЙ СЧЕТ", "ИНВЕСТ", "РЕАКТИВАЦИЯ" -> "ИНВЕСТИЦИИ";
-            case "АВТО", "АВТОСЛЕДОВАНИЕ" -> "ИНВЕСТ - АВТОСЛЕДОВАНИЕ";
-            case "ОД", "ОБНОВЛЕНИЕ ДАННЫХ", "ГОСУСЛУГИ", "ОБНОВЛЕНИЕ" -> "ОБНОВЛЕНИЕ ДАННЫХ";
-            case "ЗК", "ЗАЩИТА КАРТЫ" -> "ЗАЩИТА КАРТЫ";
-            case "МП" -> "МП";
-            case "SIM", "СИМ" -> "СИМ";
-            case "КРЕДИТ" -> "КРЕДИТ НАЛИЧНЫМИ";
-            case "ДЖУН" -> "ДЖУНИОР";
-            case "ДК", "ДЕБЕТ", "ДЕБЕТОВКА" -> "ДК";
-            case "ПРЕМ", "PREMIUM", "ПРЕМИУМ" -> "PREMIUM";
-            case "ПРИВАТ", "ПРАЙВАТ" -> "PRIVATE";
-            case "ПРО", "ПОДПИСКА" -> "PRO";
-            case "СОЦ СЧЕТ" -> "СОЦИАЛЬНЫЙ СЧЕТ";
-            case "ОПТИМУМ" -> "КК+ОПТИМУМ";
+            case "кредитка", "кредитная карта", "кк" -> "КК";
+            case "накопительный", "накопительный счет", "нс", "счет" -> "НС";
+            case "брокерский", "брокерский счет", "инвест", "реактивация" -> "ИНВЕСТИЦИИ";
+            case "авто", "автоследование" -> "ИНВЕСТ - АВТОСЛЕДОВАНИЕ";
+            case "од", "обновление данных", "госуслуги", "обновление" -> "ОБНОВЛЕНИЕ ДАННЫХ";
+            case "зк", "защита карты" -> "ЗАЩИТА КАРТЫ";
+            case "мп" -> "МП";
+            case "sim", "сим" -> "СИМ";
+            case "сим мнп", "мнп" -> "SIM MNP";
+            case "кредит" -> "КРЕДИТ НАЛИЧНЫМИ";
+            case "джун" -> "ДЖУНИОР";
+            case "дк", "дебет", "дебетовка" -> "ДК";
+            case "прем", "premium", "премиум" -> "PREMIUM";
+            case "приват", "прайват" -> "PRIVATE";
+            case "про", "pro", "подписка" -> "PRO";
+            case "соц счет" -> "СОЦИАЛЬНЫЙ СЧЕТ";
+            case "оптимум" -> "КК+ОПТИМУМ";
+            case "пд" -> "ПРИВЕДИ ДРУГА";
+            case "утиль нс" -> "УТИЛИЗАЦИЯ НС";
+            case "реф", "рефинанс", "рефинансирование" -> "РЕФИНАНСИРОВАНИЕ";
+            case "инвест утиль" -> "ИНВЕСТИЦИИ УТИЛИЗАЦИЯ БС";
+            case "мп инвест" -> "МП ИНВЕСТИЦИИ";
+            case "бизнес", "рко", "ип"  -> "СЧЕТ ДЛЯ БИЗНЕСА";
+            case "бк", "бизнес карта" -> "БИЗНЕС КАРТА";
+
             default -> normalized;
         };
     }
