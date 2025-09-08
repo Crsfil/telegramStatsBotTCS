@@ -64,7 +64,20 @@ public class StatsService {
 
         return stats;
     }
+    public void clearUserStats(Long userId) {
+        try {
+            List<Meeting> allMeetings = loadAllMeetings();
+            // Фильтруем - оставляем только встречи других пользователей
+            List<Meeting> filteredMeetings = allMeetings.stream()
+                    .filter(meeting -> !Objects.equals(meeting.getUserId(), userId))
+                    .collect(Collectors.toList());
 
+            // Сохраняем обновленный список
+            objectMapper.writeValue(new File(dataFilePath), filteredMeetings);
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка при очистке данных пользователя", e);
+        }
+    }
     public String formatStats(Map<String, Integer> stats) {
         if (stats.isEmpty()) {
             return "📊 Статистика за неделю пуста.\nДобавьте встречи с 'Мой вопрос:'";

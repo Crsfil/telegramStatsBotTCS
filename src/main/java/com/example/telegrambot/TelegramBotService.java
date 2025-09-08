@@ -58,6 +58,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
             }
             else if (messageText.equals("/stats")) {
                 handleStatsCommand(chatId);
+            } else if (messageText.equals("/reset")) {
+                Long userId = message.getFrom().getId();
+                statsService.clearUserStats(userId);
+                sendMessage(chatId, "✅ Вся ваша статистика очищена!");
             }
             // Обработка текста с офферами
             else if (messageText.toLowerCase().contains("мой вопрос:")) {
