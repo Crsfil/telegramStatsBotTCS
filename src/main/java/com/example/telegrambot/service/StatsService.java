@@ -39,6 +39,8 @@ public class StatsService {
                         meeting.getRescheduleReason(), meeting.getComment());
             } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
                 googleSheetsService.saveCommentToSheets(meeting.getUserId(), meeting.getComment());
+            } else {
+                googleSheetsService.saveMeetingToSheets(meeting.getUserId(), meeting.getOffers());
             }
 
         } catch (IOException e) {
