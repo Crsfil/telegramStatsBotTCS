@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Meeting {
+    private String id; // Уникальный ID встречи
     private LocalDateTime timestamp;
     private List<String> offers;
     private String originalText;
@@ -19,6 +20,7 @@ public class Meeting {
 
     // Конструктор для обычных встреч с офферами
     public Meeting(LocalDateTime timestamp, List<String> offers, String originalText, Long userId) {
+        this.id = extractActivityId(originalText);
         this.timestamp = timestamp;
         this.offers = offers;
         this.originalText = originalText;
@@ -29,6 +31,7 @@ public class Meeting {
     // Конструктор для переносов
     public Meeting(LocalDateTime timestamp, String originalText, Long userId,
                    String rescheduleReason, String comment) {
+        this.id = extractActivityId(originalText);
         this.timestamp = timestamp;
         this.offers = new ArrayList<>(); // Пустой список офферов для переносов
         this.originalText = originalText;
@@ -38,6 +41,7 @@ public class Meeting {
         this.meetingType = MeetingType.RESCHEDULED;
     }
     public Meeting(LocalDateTime timestamp, String originalText, Long userId, String comment) {
+        this.id = extractActivityId(originalText);
         this.timestamp = timestamp;
         this.offers = new ArrayList<>();
         this.originalText = originalText;
@@ -100,5 +104,37 @@ public class Meeting {
 
     public void setMeetingType(MeetingType meetingType) {
         this.meetingType = meetingType;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    /**
+     * Извлекает ID активности из текста встречи
+     * Ищет строку вида "Id активности - XXXXX" или "ID активности - XXXXX"
+     */
+    private String extractActivityId(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return null;
+        }
+        
+        String[] lines = text.split("\n");
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            // Ищем строки с ID активности (разные варианты написания)
+            if (trimmedLine.toLowerCase().contains("id активности") || 
+                trimmedLine.toLowerCase().contains("id активности")) {
+                String[] parts = trimmedLine.split("-");
+                if (parts.length >= 2) {
+                    return parts[1].trim();
+                }
+            }
+        }
+        return null;
     }
 }

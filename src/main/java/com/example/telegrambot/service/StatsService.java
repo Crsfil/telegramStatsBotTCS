@@ -55,15 +55,20 @@ public class StatsService {
             meetings.add(meeting);
             objectMapper.writeValue(new File(dataFilePath), meetings);
 
-            // запись в Google Sheets
-            if (meeting.getMeetingType() == MeetingType.RESCHEDULED) {
-                googleSheetsService.saveRescheduleToSheets(meeting.getUserId(), meeting.getRescheduleReason(), meeting.getComment());
-            } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
-                googleSheetsService.saveCommentToSheets(meeting.getUserId(), meeting.getComment());
-            } else {
-                if (meeting.getOffers() != null && !meeting.getOffers().isEmpty()) {
-                    googleSheetsService.saveMeetingToSheets(meeting.getUserId(), meeting.getOffers());
+            // запись в Google Sheets (временно отключено для тестирования)
+            try {
+                if (meeting.getMeetingType() == MeetingType.RESCHEDULED) {
+                    googleSheetsService.saveRescheduleToSheets(meeting.getUserId(), meeting.getRescheduleReason(), meeting.getComment());
+                } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
+                    googleSheetsService.saveCommentToSheets(meeting.getUserId(), meeting.getComment());
+                } else {
+                    if (meeting.getOffers() != null && !meeting.getOffers().isEmpty()) {
+                        googleSheetsService.saveMeetingToSheets(meeting.getUserId(), meeting.getOffers(), meeting.getId());
+                    }
                 }
+            } catch (Exception e) {
+                // Игнорируем ошибки Google Sheets для тестирования
+                System.out.println("Google Sheets недоступен: " + e.getMessage());
             }
         } catch (IOException e) {
             throw new RuntimeException("Ошибка сохранения встречи", e);
@@ -158,5 +163,117 @@ public class StatsService {
             sb.append("💬 ").append(meeting.getComment()).append("\n\n");
         });
         return sb.toString();
+    }
+
+    /**
+     * Модифицирует исходный текст встречи, добавляя расшифровку офферов и дату встречи
+     */
+    public String getModifiedMeetingText(Long userId, String originalText) {
+        List<Meeting> allMeetings = loadAllMeetings();
+        
+        // Ищем последнюю встречу пользователя с таким текстом
+        Meeting targetMeeting = allMeetings.stream()
+                .filter(meeting -> Objects.equals(meeting.getUserId(), userId))
+                .filter(meeting -> meeting.getOriginalText() != null && 
+                         meeting.getOriginalText().trim().equals(originalText.trim()))
+                .max((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()))
+                .orElse(null);
+        
+        if (targetMeeting == null) {
+            return "❌ Встреча с таким текстом не найдена";
+        }
+        
+        return modifyTextWithMeetingData(targetMeeting);
+    }
+    
+    /**
+     * Получает модифицированный текст встречи по ID активности
+     */
+    public String getModifiedMeetingTextById(String activityId) {
+        // Сначала ищем в Google Sheets
+        Meeting targetMeeting = googleSheetsService.findMeetingById(activityId);
+        
+        if (targetMeeting == null) {
+            // Если не найдено в Google Sheets, ищем в локальном файле
+            List<Meeting> allMeetings = loadAllMeetings();
+            targetMeeting = allMeetings.stream()
+                    .filter(meeting -> activityId.equals(meeting.getId()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        
+        if (targetMeeting == null) {
+            return null; // Встреча не найдена
+        }
+        
+        return modifyTextWithMeetingData(targetMeeting);
+    }
+    
+    /**
+     * Модифицирует текст встречи, добавляя расшифровку после "Мой вопрос:"
+     */
+    private String modifyTextWithMeetingData(Meeting meeting) {
+        String originalText = meeting.getOriginalText();
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        
+        // Находим позицию "Мой вопрос:" (игнорируя регистр)
+        String lowerText = originalText.toLowerCase();
+        int questionIndex = lowerText.indexOf("мой вопрос:");
+        
+        if (questionIndex == -1) {
+            return originalText; // Если не найдено, возвращаем исходный текст
+        }
+        
+        // Извлекаем часть до "Мой вопрос:"
+        String beforeQuestion = originalText.substring(0, questionIndex + "мой вопрос:".length());
+        
+        // Создаем модифицированную часть после "Мой вопрос:"
+        StringBuilder modifiedPart = new StringBuilder();
+        
+        if (meeting.getMeetingType() == MeetingType.RESCHEDULED) {
+            // Для переносов
+            modifiedPart.append(" ПЕРЕНЕСЕНО - ");
+            modifiedPart.append(meeting.getRescheduleReason());
+            if (meeting.getComment() != null && !meeting.getComment().trim().isEmpty()) {
+                modifiedPart.append(" (").append(meeting.getComment()).append(")");
+            }
+            modifiedPart.append(" [").append(meeting.getTimestamp().format(dateFormatter))
+                       .append(" ").append(meeting.getTimestamp().format(timeFormatter)).append("]");
+            
+        } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
+            // Для комментариев
+            modifiedPart.append(" КОММЕНТАРИЙ - ");
+            modifiedPart.append(meeting.getComment());
+            modifiedPart.append(" [").append(meeting.getTimestamp().format(dateFormatter))
+                       .append(" ").append(meeting.getTimestamp().format(timeFormatter)).append("]");
+            
+        } else {
+            // Для обычных встреч с офферами
+            if (meeting.getOffers() != null && !meeting.getOffers().isEmpty()) {
+                modifiedPart.append(" ");
+                
+                // Группируем офферы по количеству
+                Map<String, Long> offerCounts = meeting.getOffers().stream()
+                        .collect(Collectors.groupingBy(offer -> offer, Collectors.counting()));
+                
+                List<String> offerDescriptions = new ArrayList<>();
+                for (Map.Entry<String, Long> entry : offerCounts.entrySet()) {
+                    String offerName = entry.getKey();
+                    Long count = entry.getValue();
+                    if (count > 1) {
+                        offerDescriptions.add(offerName + " (" + count + ")");
+                    } else {
+                        offerDescriptions.add(offerName);
+                    }
+                }
+                
+                modifiedPart.append(String.join(", ", offerDescriptions));
+                modifiedPart.append(" [").append(meeting.getTimestamp().format(dateFormatter))
+                           .append(" ").append(meeting.getTimestamp().format(timeFormatter)).append("]");
+            }
+        }
+        
+        return beforeQuestion + modifiedPart.toString();
     }
 }

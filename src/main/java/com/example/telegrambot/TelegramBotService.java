@@ -12,6 +12,8 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +28,9 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private final MessageParserService messageParserService;
     private final StatsService statsService;
+    
+    // Хранилище состояний пользователей (кто ожидает модификацию текста)
+    private final Map<Long, Boolean> userModifyMode = new HashMap<>();
 
     // Конструктор для dependency injection
     public TelegramBotService(MessageParserService messageParserService, StatsService statsService) {
@@ -56,7 +61,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                         "\n\nДля офферов:\nМой вопрос: кк нс инвест\n\n" +
                         "Для переносов:\nМой вопрос: перенос недозвон клиент не ответил\n\n" +
                         "Команды:\n/offers - статистика продаж\n/rescheduling - статистика переносов\n/" +
-                        "meetings - встречи с комментариями\n/reset - очистить данные");
+                        "meetings - встречи с комментариями\n/modify - получить модифицированный текст встречи\n/reset - очистить данные");
             } else if (messageText.equals("/offers")) {
                 Long userId = message.getFrom().getId();
                 Map<String, Integer> offerStats = statsService.getWeeklyOfferStats(userId);
@@ -76,12 +81,36 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 Long userId = message.getFrom().getId();
                 statsService.clearUserStats(userId);
                 sendMessage(chatId, "✅ Вся ваша статистика очищена!");
+            } else if (messageText.equals("/modify")) {
+                Long userId = message.getFrom().getId();
+                userModifyMode.put(userId, true);
+                sendMessage(chatId, "🔍 Поиск встреч по ID активности:\n\n" +
+                        "Отправьте ID активности для получения модифицированного текста встречи\n\n" +
+                        "Пример: aOBv7DDXE4AqEPC8jHAqcA\n\n" +
+                        "❌ Для выхода отправьте /cancel");
+            } else if (messageText.equals("/cancel")) {
+                Long userId = message.getFrom().getId();
+                userModifyMode.remove(userId);
+                sendMessage(chatId, "✅ Режим модификации отменен. Используйте /start для справки.");
             }
             // Обработка текста с офферами или переносами
             else if (messageText.toLowerCase().contains("мой вопрос:")) {
-                handleMeetingMessage(chatId, messageText, message);
+                Long userId = message.getFrom().getId();
+                
+                // Проверяем, находится ли пользователь в режиме модификации
+                if (userModifyMode.getOrDefault(userId, false)) {
+                    handleModifyText(chatId, messageText, userId);
+                    userModifyMode.remove(userId); // Выходим из режима модификации
+                } else {
+                    handleMeetingMessage(chatId, messageText, message);
+                }
             } else {
-                sendMessage(chatId, "Не понял команду. Используй /start для справки.");
+                Long userId = message.getFrom().getId();
+                if (userModifyMode.getOrDefault(userId, false)) {
+                    handleModifyModeInput(chatId, messageText, userId);
+                } else {
+                    sendMessage(chatId, "Не понял команду. Используй /start для справки.");
+                }
             }
         }
     }
@@ -124,6 +153,51 @@ public class TelegramBotService extends TelegramLongPollingBot {
         } catch (Exception e) {
             sendMessage(chatId, "❌ Ошибка при обработке встречи: " + e.getMessage());
         }
+    }
+
+    private void handleModifyText(long chatId, String messageText, Long userId) {
+        try {
+            String modifiedText = statsService.getModifiedMeetingText(userId, messageText);
+            sendMessage(chatId, "📝 Модифицированный текст встречи:\n\n" + modifiedText);
+        } catch (Exception e) {
+            sendMessage(chatId, "❌ Ошибка при получении модифицированного текста: " + e.getMessage());
+        }
+    }
+
+    private void handleModifyModeInput(long chatId, String input, Long userId) {
+        try {
+            // Обрезаем пробелы и ищем встречу по ID
+            String trimmedInput = input.trim();
+            
+            if (isActivityId(trimmedInput)) {
+                String modifiedText = statsService.getModifiedMeetingTextById(trimmedInput);
+                if (modifiedText != null && !modifiedText.isEmpty()) {
+                    sendMessage(chatId, "📝 Модифицированный текст встречи:\n\n" + modifiedText);
+                } else {
+                    sendMessage(chatId, "❌ Встреча с ID " + trimmedInput + " не найдена");
+                }
+                userModifyMode.remove(userId); // Выходим из режима модификации
+                return;
+            }
+            
+            // Если не распознали формат
+            sendMessage(chatId, "❌ Неверный формат ввода.\n\n" +
+                    "🔍 Для поиска по ID отправьте ID активности (например: aOBv7DDXE4AqEPC8jHAqcA)\n\n" +
+                    "❌ Для выхода отправьте /cancel");
+            
+        } catch (Exception e) {
+            sendMessage(chatId, "❌ Ошибка при обработке ввода: " + e.getMessage());
+        }
+    }
+
+    private boolean isActivityId(String input) {
+        // ID активности обычно содержит буквы и цифры, длина больше 10 символов
+        return input != null && input.length() > 10 && input.matches("[a-zA-Z0-9]+");
+    }
+
+    private boolean isDateInput(String input) {
+        // Проверяем формат ДД.ММ
+        return input != null && input.matches("\\d{1,2}\\.\\d{1,2}");
     }
 
     private void sendMessage(long chatId, String text) {

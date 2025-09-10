@@ -63,15 +63,72 @@ public class GoogleSheetsService {
     // ---------- Публичные методы, используемые сервисами ----------
 
     /** Запись офферов в недельный лист */
-    public void saveMeetingToSheets(Long userId, List<String> offers) {
+    public void saveMeetingToSheets(Long userId, List<String> offers, String activityId) {
         try {
             String sheetName = generateSheetName(userId);
             if (!sheetExists(sheetName)) {
                 createOfferSheet(sheetName);
             }
-            addMeetingRow(sheetName, offers);
+            addMeetingRow(sheetName, offers, activityId);
         } catch (Exception e) {
             throw new RuntimeException("Ошибка сохранения офферов в Google Sheets", e);
+        }
+    }
+
+    /** Поиск встречи по ID активности */
+    public Meeting findMeetingById(String activityId) {
+        try {
+            // Получаем список всех листов
+            Spreadsheet spreadsheet = sheetsService.spreadsheets().get(spreadsheetId).execute();
+            List<Sheet> sheets = spreadsheet.getSheets();
+            
+            for (Sheet sheet : sheets) {
+                String sheetName = sheet.getProperties().getTitle();
+                
+                // Пропускаем листы с переносами и комментариями
+                if (sheetName.contains("_Переносы") || sheetName.contains("_Комментарии")) {
+                    continue;
+                }
+                
+                // Читаем данные листа
+                ValueRange vr = sheetsService.spreadsheets().values()
+                        .get(spreadsheetId, sheetName + "!A:ZZ").execute();
+                
+                List<List<Object>> rows = vr.getValues();
+                if (rows == null || rows.isEmpty()) continue;
+                
+                // Ищем строку с нужным ID активности (колонка C)
+                for (int i = 1; i < rows.size(); i++) { // начиная со второй строки (пропускаем заголовки)
+                    List<Object> row = rows.get(i);
+                    if (row.size() >= 3 && activityId.equals(String.valueOf(row.get(2)))) {
+                        // Найдена встреча, создаем объект Meeting
+                        Meeting meeting = new Meeting();
+                        meeting.setId(activityId);
+                        meeting.setTimestamp(LocalDateTime.now()); // Время встречи
+                        
+                        // Извлекаем офферы из строки
+                        List<String> offers = new ArrayList<>();
+                        for (int j = 3; j < row.size(); j++) {
+                            if ("1".equals(String.valueOf(row.get(j)))) {
+                                // Получаем название оффера из заголовка
+                                if (rows.get(0).size() > j) {
+                                    offers.add(String.valueOf(rows.get(0).get(j)));
+                                }
+                            }
+                        }
+                        meeting.setOffers(offers);
+                        meeting.setMeetingType(MeetingType.COMPLETED);
+                        meeting.setOriginalText("Мой вопрос: " + String.join(", ", offers).toLowerCase());
+                        
+                        return meeting;
+                    }
+                }
+            }
+            
+            return null; // Встреча не найдена
+        } catch (Exception e) {
+            System.out.println("Ошибка поиска встречи по ID: " + e.getMessage());
+            return null;
         }
     }
 
@@ -249,10 +306,11 @@ public class GoogleSheetsService {
 
     private void createOfferSheet(String sheetName) throws IOException {
         addEmptySheet(sheetName);
-        // заголовки: Дата, Время, офферы...
+        // заголовки: Дата, Время, ID активности, офферы...
         List<Object> headers = new ArrayList<>();
         headers.add("Дата");
         headers.add("Время");
+        headers.add("ID активности");
         headers.addAll(OfferType.getAllDisplayNames());
         ValueRange vr = new ValueRange().setValues(Collections.singletonList(headers));
         sheetsService.spreadsheets().values()
@@ -286,12 +344,13 @@ public class GoogleSheetsService {
         sheetsService.spreadsheets().batchUpdate(spreadsheetId, batch).execute();
     }
 
-    private void addMeetingRow(String sheetName, List<String> offers) throws IOException {
+    private void addMeetingRow(String sheetName, List<String> offers, String activityId) throws IOException {
         LocalDateTime now = LocalDateTime.now();
-        // подготавливаем строку: Дата, Время, затем для каждого оффера "1" или ""
+        // подготавливаем строку: Дата, Время, ID активности, затем для каждого оффера "1" или ""
         List<Object> row = new ArrayList<>();
         row.add(now.format(DateTimeFormatter.ofPattern("dd.MM")));
         row.add(now.format(DateTimeFormatter.ofPattern("HH:mm")));
+        row.add(activityId); // Добавляем ID активности
 
         // Получаем заголовки, чтобы понять порядок офферов
         ValueRange headerVr = sheetsService.spreadsheets().values()
@@ -303,7 +362,7 @@ public class GoogleSheetsService {
             if (o != null) normalized.add(o.trim());
         }
 
-        for (int i = 2; i < header.size(); i++) { // начиная с 3-й колонки
+        for (int i = 3; i < header.size(); i++) { // начиная с 4-й колонки (после ID активности)
             String colName = String.valueOf(header.get(i)).trim();
             row.add(normalized.contains(colName) ? "1" : "");
         }
