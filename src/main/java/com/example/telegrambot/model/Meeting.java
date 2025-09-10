@@ -37,6 +37,14 @@ public class Meeting {
         this.comment = comment;
         this.meetingType = MeetingType.RESCHEDULED;
     }
+    public Meeting(LocalDateTime timestamp, String originalText, Long userId, String comment) {
+        this.timestamp = timestamp;
+        this.offers = new ArrayList<>();
+        this.originalText = originalText;
+        this.userId = userId;
+        this.comment = comment;
+        this.meetingType = MeetingType.COMMENT;
+    }
 
     public LocalDateTime getTimestamp() {
         return timestamp;

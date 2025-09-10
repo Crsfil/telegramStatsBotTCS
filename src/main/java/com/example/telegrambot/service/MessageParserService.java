@@ -32,9 +32,16 @@ public class MessageParserService {
         // Проверяем начинается ли с "перенос"
         if (contentText.toLowerCase().startsWith("перенос")) {
             return parseRescheduleMessage(contentText, messageText, userId);
+        } else if (contentText.toLowerCase().startsWith("комментарий")) {
+            return parseCommentMessage(contentText, messageText, userId);
         } else {
             return parseOffersMessage(contentText, messageText, userId);
         }
+    }
+
+    private Meeting parseCommentMessage(String commentText, String originalText, Long userId) {
+        String comment = commentText.substring(11).trim(); // "комментарий".length() = 11
+        return new Meeting(LocalDateTime.now(), originalText, userId, comment);
     }
 
     private Meeting parseRescheduleMessage(String rescheduleText, String originalText, Long userId) {

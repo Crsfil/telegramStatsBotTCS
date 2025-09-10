@@ -4,13 +4,12 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum RescheduleReason {
+    ОТКАЗ("отказ", Arrays.asList("отказ")),
     НЕДОЗВОН("недозвон", Arrays.asList(
             "недозвон", "не взял трубку"
     )),
 
-    НЕ_ЯВИЛСЯ_НА_АДРЕС("не явился на адрес", Arrays.asList(
-            "по другому адресу", "другой адрес"
-    )),
+    НЕ_ЯВИЛСЯ_НА_АДРЕС("не явился на адрес", Arrays.asList()),
 
     В_ДРУГОМ_ГОРОДЕ("не в городе", Arrays.asList(
             "за городом", "не в городе"
@@ -25,8 +24,6 @@ public enum RescheduleReason {
     )),
     НЕТ_ПАСПОРТА("нет документов", Arrays.asList(
             "без паспорта", "нет паспорта", "забыл паспорт")),
-
-    ОТКАЗ("отказ", Arrays.asList("отказ")),
 
     ДРУГОЕ("другое коммент", Arrays.asList());
 

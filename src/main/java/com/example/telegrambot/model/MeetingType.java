@@ -2,7 +2,8 @@ package com.example.telegrambot.model;
 
 public enum MeetingType {
     COMPLETED("Проведена"),
-    RESCHEDULED("Перенесена");
+    RESCHEDULED("Перенесена"),
+    COMMENT("Комментарий");
 
     private final String displayName;
 

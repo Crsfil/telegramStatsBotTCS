@@ -53,26 +53,22 @@ public class TelegramBotService extends TelegramLongPollingBot {
             // Обработка команд
             if (messageText.equals("/start")) {
                 sendMessage(chatId, "Привет! 📊\n\nОтправь мне текст встречи с 'Мой вопрос:' и я буду считать статистику.\n\nДля офферов:\nМой вопрос: кк нс инвест\n\nДля переносов:\nМой вопрос: перенос недозвон клиент не ответил\n\nКоманды:\n/statsOffers - статистика продаж\n/statsRescheduling - статистика переносов\n/meetings - встречи с комментариями\n/reset - очистить данные");
-            }
-            else if (messageText.equals("/statsOffers")) {
+            } else if (messageText.equals("/offers")) {
                 Long userId = message.getFrom().getId();
                 Map<String, Integer> offerStats = statsService.getWeeklyOfferStats(userId);
                 String statsText = statsService.formatOfferStats(offerStats);
                 sendMessage(chatId, statsText);
-            }
-            else if (messageText.equals("/statsRescheduling")) {
+            } else if (messageText.equals("/rescheduling")) {
                 Long userId = message.getFrom().getId();
                 Map<String, Integer> rescheduleStats = statsService.getWeeklyRescheduleStats(userId);
                 String statsText = statsService.formatRescheduleStats(rescheduleStats);
                 sendMessage(chatId, statsText);
-            }
-            else if (messageText.equals("/meetings")) {
+            } else if (messageText.equals("/meetings")) {
                 Long userId = message.getFrom().getId();
                 List<Meeting> meetings = statsService.getWeeklyMeetingsWithComments(userId);
                 String meetingsText = statsService.formatMeetingsWithComments(meetings);
                 sendMessage(chatId, meetingsText);
-            }
-            else if (messageText.equals("/reset")) {
+            } else if (messageText.equals("/reset")) {
                 Long userId = message.getFrom().getId();
                 statsService.clearUserStats(userId);
                 sendMessage(chatId, "✅ Вся ваша статистика очищена!");
@@ -80,8 +76,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
             // Обработка текста с офферами или переносами
             else if (messageText.toLowerCase().contains("мой вопрос:")) {
                 handleMeetingMessage(chatId, messageText, message);
-            }
-            else {
+            } else {
                 sendMessage(chatId, "Не понял команду. Используй /start для справки.");
             }
         }
@@ -96,10 +91,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 sendMessage(chatId, "❌ Не могу найти 'Мой вопрос:' в сообщении");
                 return;
             }
-
             // Сохраняем встречу (любого типа)
             statsService.saveMeeting(meeting);
-
             // Формируем ответ в зависимости от типа встречи
             StringBuilder response = new StringBuilder();
 
@@ -107,6 +100,9 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 response.append("📅 Перенос зафиксирован!\n\n");
                 response.append("Причина: ").append(meeting.getRescheduleReason()).append("\n");
                 response.append("Комментарий: ").append(meeting.getComment());
+            } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
+                response.append("💬 Комментарий сохранен!\n\n");
+                response.append("Текст: ").append(meeting.getComment());
             } else {
                 if (meeting.getOffers().isEmpty()) {
                     sendMessage(chatId, "❌ Не найдено офферов после 'Мой вопрос:'");

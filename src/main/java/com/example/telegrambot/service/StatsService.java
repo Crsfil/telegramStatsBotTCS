@@ -88,7 +88,8 @@ public class StatsService {
         return loadAllMeetings().stream()
                 .filter(meeting -> meeting.getUserId() != null && meeting.getUserId().equals(userId))
                 .filter(meeting -> meeting.getTimestamp().isAfter(weekAgo))
-                .filter(meeting -> meeting.getComment() != null && !meeting.getComment().isEmpty())
+                .filter(meeting -> (meeting.getComment() != null && !meeting.getComment().isEmpty()) ||
+                        meeting.getMeetingType() == MeetingType.COMMENT)
                 .collect(Collectors.toList());
     }
 
