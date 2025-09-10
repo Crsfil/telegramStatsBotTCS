@@ -1,20 +1,21 @@
 package com.example.telegrambot;
 
 import com.example.telegrambot.model.Meeting;
-import com.example.telegrambot.service.GoogleSheetsService;
+import com.example.telegrambot.model.MeetingType;
 import com.example.telegrambot.service.MessageParserService;
 import com.example.telegrambot.service.StatsService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.util.List;
 import java.util.Map;
 
-@Service
+@Component
 public class TelegramBotService extends TelegramLongPollingBot {
 
     @Value("${bot.username}")
@@ -25,14 +26,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private final MessageParserService messageParserService;
     private final StatsService statsService;
-    private final GoogleSheetsService googleSheetsService;
 
-    public TelegramBotService(MessageParserService messageParserService,
-                              StatsService statsService,
-                              GoogleSheetsService googleSheetsService) {
+    // Конструктор для dependency injection
+    public TelegramBotService(MessageParserService messageParserService, StatsService statsService) {
         this.messageParserService = messageParserService;
         this.statsService = statsService;
-        this.googleSheetsService = googleSheetsService;
     }
 
     @Override
@@ -54,16 +52,32 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
             // Обработка команд
             if (messageText.equals("/start")) {
-                sendMessage(chatId, "Привет! 📊\n\nОтправь мне текст встречи с 'Мой вопрос:' и я буду считать статистику по офферам.\n\nКоманды:\n/stats - показать статистику за неделю");
+                sendMessage(chatId, "Привет! 📊\n\nОтправь мне текст встречи с 'Мой вопрос:' и я буду считать статистику.\n\nДля офферов:\nМой вопрос: кк нс инвест\n\nДля переносов:\nМой вопрос: перенос недозвон клиент не ответил\n\nКоманды:\n/statsOffers - статистика продаж\n/statsRescheduling - статистика переносов\n/meetings - встречи с комментариями\n/reset - очистить данные");
             }
-            else if (messageText.equals("/stats")) {
-                handleStatsCommand(chatId);
-            } else if (messageText.equals("/reset")) {
+            else if (messageText.equals("/statsOffers")) {
+                Long userId = message.getFrom().getId();
+                Map<String, Integer> offerStats = statsService.getWeeklyOfferStats(userId);
+                String statsText = statsService.formatOfferStats(offerStats);
+                sendMessage(chatId, statsText);
+            }
+            else if (messageText.equals("/statsRescheduling")) {
+                Long userId = message.getFrom().getId();
+                Map<String, Integer> rescheduleStats = statsService.getWeeklyRescheduleStats(userId);
+                String statsText = statsService.formatRescheduleStats(rescheduleStats);
+                sendMessage(chatId, statsText);
+            }
+            else if (messageText.equals("/meetings")) {
+                Long userId = message.getFrom().getId();
+                List<Meeting> meetings = statsService.getWeeklyMeetingsWithComments(userId);
+                String meetingsText = statsService.formatMeetingsWithComments(meetings);
+                sendMessage(chatId, meetingsText);
+            }
+            else if (messageText.equals("/reset")) {
                 Long userId = message.getFrom().getId();
                 statsService.clearUserStats(userId);
                 sendMessage(chatId, "✅ Вся ваша статистика очищена!");
             }
-            // Обработка текста с офферами
+            // Обработка текста с офферами или переносами
             else if (messageText.toLowerCase().contains("мой вопрос:")) {
                 handleMeetingMessage(chatId, messageText, message);
             }
@@ -73,28 +87,9 @@ public class TelegramBotService extends TelegramLongPollingBot {
         }
     }
 
-    private void handleStatsCommand(long chatId) {
-        try {
-            Long userId = getUserIdFromChatId(chatId);
-
-            // Получаем статистику из Google Sheets
-            Map<String, Integer> weeklyStats = googleSheetsService.getWeeklyStatsFromSheets(userId);
-
-            if (weeklyStats.isEmpty()) {
-                // Если в Sheets пусто, пробуем локальную статистику
-                weeklyStats = statsService.getWeeklyStats();
-            }
-
-            String statsText = statsService.formatStats(weeklyStats);
-            sendMessage(chatId, statsText);
-        } catch (Exception e) {
-            sendMessage(chatId, "❌ Ошибка при получении статистики: " + e.getMessage());
-        }
-    }
-
     private void handleMeetingMessage(long chatId, String messageText, Message message) {
         try {
-            Long userId = getUserIdFromChatId(chatId);
+            Long userId = message.getFrom().getId();
             Meeting meeting = messageParserService.parseMeetingMessage(messageText, userId);
 
             if (meeting == null) {
@@ -102,46 +97,33 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 return;
             }
 
-            if (meeting.getOffers().isEmpty()) {
-                sendMessage(chatId, "❌ Не найдено офферов после 'Мой вопрос:'");
-                return;
-            }
-
-            // Сохраняем встречу локально (в JSON)
+            // Сохраняем встречу (любого типа)
             statsService.saveMeeting(meeting);
 
-            // Сохраняем в Google Sheets
-            boolean savedToSheets = false;
-            try {
-                googleSheetsService.saveMeetingToSheets(userId, meeting.getOffers());
-                savedToSheets = true;
-                System.out.println("✅ Saved to Google Sheets for user: " + userId);
-            } catch (Exception e) {
-                System.err.println("❌ Error saving to Google Sheets: " + e.getMessage());
-                e.printStackTrace();
-            }
+            // Формируем ответ в зависимости от типа встречи
+            StringBuilder response = new StringBuilder();
 
-            // Отправляем подтверждение
-            StringBuilder response = new StringBuilder("✅ Встреча сохранена");
-            if (savedToSheets) {
-                response.append(" в Google Sheets");
-            }
-            response.append("!\n\nНайденные офферы:\n");
+            if (meeting.getMeetingType() == MeetingType.RESCHEDULED) {
+                response.append("📅 Перенос зафиксирован!\n\n");
+                response.append("Причина: ").append(meeting.getRescheduleReason()).append("\n");
+                response.append("Комментарий: ").append(meeting.getComment());
+            } else {
+                if (meeting.getOffers().isEmpty()) {
+                    sendMessage(chatId, "❌ Не найдено офферов после 'Мой вопрос:'");
+                    return;
+                }
 
-            for (String offer : meeting.getOffers()) {
-                response.append("• ").append(offer).append("\n");
+                response.append("✅ Встреча сохранена!\n\nНайденные офферы:\n");
+                for (String offer : meeting.getOffers()) {
+                    response.append("• ").append(offer).append("\n");
+                }
             }
 
             sendMessage(chatId, response.toString());
 
         } catch (Exception e) {
             sendMessage(chatId, "❌ Ошибка при обработке встречи: " + e.getMessage());
-            e.printStackTrace();
         }
-    }
-
-    private Long getUserIdFromChatId(long chatId) {
-        return chatId; // Используем chatId как userId
     }
 
     private void sendMessage(long chatId, String text) {

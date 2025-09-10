@@ -1,10 +1,13 @@
 package com.example.telegrambot.service;
 
 import com.example.telegrambot.model.Meeting;
+import com.example.telegrambot.model.OfferType;
+import com.example.telegrambot.model.RescheduleReason;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -20,12 +23,33 @@ public class MessageParserService {
         }
 
         // Извлекаем текст после "Мой вопрос:"
-        String offersText = messageText.substring(questionIndex + "мой вопрос:".length()).trim();
+        String contentText = messageText.substring(questionIndex + "мой вопрос:".length()).trim();
 
-        if (offersText.isEmpty()) {
-            return new Meeting(LocalDateTime.now(), new ArrayList<String>(), messageText, userId);
+        if (contentText.isEmpty()) {
+            return new Meeting(LocalDateTime.now(), new ArrayList<>(), messageText, userId);
         }
 
+        // Проверяем начинается ли с "перенос"
+        if (contentText.toLowerCase().startsWith("перенос")) {
+            return parseRescheduleMessage(contentText, messageText, userId);
+        } else {
+            return parseOffersMessage(contentText, messageText, userId);
+        }
+    }
+
+    private Meeting parseRescheduleMessage(String rescheduleText, String originalText, Long userId) {
+        // Убираем слово "перенос" и получаем текст с причиной и комментарием
+        String reasonAndComment = rescheduleText.substring(7).trim(); // "перенос".length() = 7
+
+        // Автоматически определяем причину по ключевым словам
+        RescheduleReason reason = RescheduleReason.findByKeywords(reasonAndComment);
+
+        // Возвращаем встречу типа "перенос" - используем правильный конструктор
+        return new Meeting(LocalDateTime.now(), originalText, userId,
+                reason.getDisplayName(), reasonAndComment);
+    }
+
+    private Meeting parseOffersMessage(String offersText, String originalText, Long userId) {
         // Разбиваем на строки, затем каждую строку на слова
         List<String> offers = new ArrayList<>();
 
@@ -44,41 +68,11 @@ public class MessageParserService {
             }
         }
 
-        return new Meeting(LocalDateTime.now(), offers, messageText, userId);
+        return new Meeting(LocalDateTime.now(), offers, originalText, userId);
     }
 
     private String normalizeOffer(String offer) {
-        // Приводим к верхнему регистру и убираем лишние пробелы
-        String normalized = offer.trim().toLowerCase();
-
-        // Алиасы для офферов
-        return switch (normalized) {
-            case "кредитка", "кредитная карта", "кк" -> "КК";
-            case "накопительный", "накопительный счет", "нс", "счет" -> "НС";
-            case "брокерский", "брокерский счет", "инвест", "реактивация" -> "ИНВЕСТИЦИИ";
-            case "авто", "автоследование" -> "ИНВЕСТ - АВТОСЛЕДОВАНИЕ";
-            case "од", "обновление данных", "госуслуги", "обновление" -> "ОБНОВЛЕНИЕ ДАННЫХ";
-            case "зк", "защита карты" -> "ЗАЩИТА КАРТЫ";
-            case "мп" -> "МП";
-            case "sim", "сим" -> "СИМ";
-            case "сим мнп", "мнп" -> "SIM MNP";
-            case "кредит" -> "КРЕДИТ НАЛИЧНЫМИ";
-            case "джун" -> "ДЖУНИОР";
-            case "дк", "дебет", "дебетовка" -> "ДК";
-            case "прем", "premium", "премиум" -> "PREMIUM";
-            case "приват", "прайват" -> "PRIVATE";
-            case "про", "pro", "подписка" -> "PRO";
-            case "соц счет" -> "СОЦИАЛЬНЫЙ СЧЕТ";
-            case "оптимум" -> "КК+ОПТИМУМ";
-            case "пд" -> "ПРИВЕДИ ДРУГА";
-            case "утиль нс" -> "УТИЛИЗАЦИЯ НС";
-            case "реф", "рефинанс", "рефинансирование" -> "РЕФИНАНСИРОВАНИЕ";
-            case "инвест утиль" -> "ИНВЕСТИЦИИ УТИЛИЗАЦИЯ БС";
-            case "мп инвест" -> "МП ИНВЕСТИЦИИ";
-            case "бизнес", "рко", "ип"  -> "СЧЕТ ДЛЯ БИЗНЕСА";
-            case "бк", "бизнес карта" -> "БИЗНЕС КАРТА";
-
-            default -> normalized;
-        };
+        OfferType offerType = OfferType.findByAlias(offer);
+        return offerType != null ? offerType.getDisplayName() : offer.trim().toUpperCase();
     }
 }
