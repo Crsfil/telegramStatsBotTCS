@@ -53,7 +53,118 @@ public class GoogleSheetsService {
                 .setApplicationName("Telegram Bot Stats")
                 .build();
     }
+    private void createRescheduleSheet(String sheetName) throws IOException {
+        // Создаем новый лист
+        AddSheetRequest addSheetRequest = new AddSheetRequest()
+                .setProperties(new SheetProperties().setTitle(sheetName));
 
+        BatchUpdateSpreadsheetRequest batchRequest = new BatchUpdateSpreadsheetRequest()
+                .setRequests(Collections.singletonList(new Request().setAddSheet(addSheetRequest)));
+
+        sheetsService.spreadsheets().batchUpdate(spreadsheetId, batchRequest).execute();
+
+        // Создаем заголовки для переносов
+        List<Object> headers = Arrays.asList("Дата", "Время", "Причина", "Комментарий");
+        ValueRange valueRange = new ValueRange().setValues(Collections.singletonList(headers));
+
+        sheetsService.spreadsheets().values()
+                .update(spreadsheetId, sheetName + "!A1", valueRange)
+                .setValueInputOption("RAW")
+                .execute();
+    }
+
+    private void addRescheduleRow(String sheetName, String reason, String comment) throws IOException {
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Object> row = Arrays.asList(
+                now.format(DateTimeFormatter.ofPattern("dd.MM")),
+                now.format(DateTimeFormatter.ofPattern("HH:mm")),
+                reason,
+                comment
+        );
+
+        // Находим следующую пустую строку
+        addRowToSheet(sheetName, row);
+    }
+
+    private void addRowToSheet(String sheetName, List<Object> row) throws IOException {
+        ValueRange response = sheetsService.spreadsheets().values()
+                .get(spreadsheetId, sheetName + "!A:A")
+                .execute();
+
+        int nextRow = response.getValues() != null ? response.getValues().size() + 1 : 2;
+
+        ValueRange valueRange = new ValueRange().setValues(Collections.singletonList(row));
+        sheetsService.spreadsheets().values()
+                .update(spreadsheetId, sheetName + "!A" + nextRow, valueRange)
+                .setValueInputOption("RAW")
+                .execute();
+    }
+
+
+    private void createCommentSheet(String sheetName) throws IOException {
+        // Создаем новый лист
+        AddSheetRequest addSheetRequest = new AddSheetRequest()
+                .setProperties(new SheetProperties().setTitle(sheetName));
+
+        BatchUpdateSpreadsheetRequest batchRequest = new BatchUpdateSpreadsheetRequest()
+                .setRequests(Collections.singletonList(new Request().setAddSheet(addSheetRequest)));
+
+        sheetsService.spreadsheets().batchUpdate(spreadsheetId, batchRequest).execute();
+
+        // Создаем заголовки для комментариев
+        List<Object> headers = Arrays.asList("Дата", "Время", "Комментарий");
+        ValueRange valueRange = new ValueRange().setValues(Collections.singletonList(headers));
+
+        sheetsService.spreadsheets().values()
+                .update(spreadsheetId, sheetName + "!A1", valueRange)
+                .setValueInputOption("RAW")
+                .execute();
+    }
+
+    private void addCommentRow(String sheetName, String comment) throws IOException {
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Object> row = Arrays.asList(
+                now.format(DateTimeFormatter.ofPattern("dd.MM")),
+                now.format(DateTimeFormatter.ofPattern("HH:mm")),
+                comment
+        );
+
+        // Находим следующую пустую строку
+        addRowToSheet(sheetName, row);
+    }
+    public void saveRescheduleToSheets(Long userId, String reason, String comment) {
+        try {
+            String sheetName = generateRescheduleSheetName(userId);
+            if (!sheetExists(sheetName)) {
+                createRescheduleSheet(sheetName);
+            }
+            addRescheduleRow(sheetName, reason, comment);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка сохранения переноса", e);
+        }
+    }
+
+    public void saveCommentToSheets(Long userId, String comment) {
+        try {
+            String sheetName = generateCommentSheetName(userId);
+            if (!sheetExists(sheetName)) {
+                createCommentSheet(sheetName);
+            }
+            addCommentRow(sheetName, comment);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка сохранения комментария", e);
+        }
+    }
+
+    private String generateRescheduleSheetName(Long userId) {
+        return generateSheetName(userId) + "_Переносы";
+    }
+
+    private String generateCommentSheetName(Long userId) {
+        return generateSheetName(userId) + "_Комментарии";
+    }
     /**
      * Сохраняет встречу с офферами в Google Sheets
      * Переносы сохраняются только в локальный JSON файл
@@ -243,11 +354,10 @@ public class GoogleSheetsService {
     }
 
     /**
-     * Удаляет лист пользователя (для команды /reset)
+     * Удаляет листы пользователя (для команды /reset)
      */
-    public void deleteUserSheet(Long userId) {
+    private void deleteSheetIfExists(String sheetName) {
         try {
-            String sheetName = generateSheetName(userId);
             if (sheetExists(sheetName)) {
                 // Найти ID листа
                 Spreadsheet spreadsheet = sheetsService.spreadsheets().get(spreadsheetId).execute();
@@ -267,7 +377,7 @@ public class GoogleSheetsService {
             }
         } catch (Exception e) {
             // Не критично если лист не удалился - пользователь может удалить вручную
-            System.err.println("Предупреждение: не удалось удалить лист " + generateSheetName(userId) + ": " + e.getMessage());
+            System.err.println("Предупреждение: не удалось удалить лист " + sheetName + ": " + e.getMessage());
         }
     }
 }

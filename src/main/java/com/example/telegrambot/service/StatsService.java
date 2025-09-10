@@ -34,8 +34,11 @@ public class StatsService {
             objectMapper.writeValue(new File(dataFilePath), meetings);
 
             // Сохраняем в Google Sheets только встречи с офферами
-            if (meeting.getMeetingType() == MeetingType.COMPLETED && !meeting.getOffers().isEmpty()) {
-                googleSheetsService.saveMeetingToSheets(meeting.getUserId(), meeting.getOffers());
+            if (meeting.getMeetingType() == MeetingType.RESCHEDULED) {
+                googleSheetsService.saveRescheduleToSheets(meeting.getUserId(),
+                        meeting.getRescheduleReason(), meeting.getComment());
+            } else if (meeting.getMeetingType() == MeetingType.COMMENT) {
+                googleSheetsService.saveCommentToSheets(meeting.getUserId(), meeting.getComment());
             }
 
         } catch (IOException e) {
