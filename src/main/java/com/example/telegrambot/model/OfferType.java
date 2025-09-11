@@ -6,10 +6,9 @@ import java.util.stream.Collectors;
 
 public enum OfferType {
     КК("КК", Arrays.asList("кредитка", "кредитная карта", "кк")),
-    НС("НС", Arrays.asList("накопительный", "накопительный счет", "нс", "накопительный")),
     ИНВЕСТИЦИИ("ИНВЕСТИЦИИ", Arrays.asList("брокерский", "брокерский счет", "инвест", "реактивация")),
     ИНВЕСТ_АВТОСЛЕДОВАНИЕ("ИНВЕСТ - АВТОСЛЕДОВАНИЕ", Arrays.asList( "автоследование", "инвест авто")),
-    ОБНОВЛЕНИЕ_ДАННЫХ("ОБНОВЛЕНИЕ ДАННЫХ", Arrays.asList("од", "обновление данных", "госуслуги", "обновление")),
+    ОБНОВЛЕНИЕ_ДАННЫХ("ОБНОВЛЕНИЕ ДАННЫХ", Arrays.asList("од", "обновление данных")),
     ЗАЩИТА_КАРТЫ("ЗАЩИТА КАРТЫ", Arrays.asList("зк", "защита карты")),
     МП("МП", Arrays.asList("мп")),
     СИМ("СИМ", Arrays.asList("sim", "сим")),
@@ -24,6 +23,7 @@ public enum OfferType {
     КК_ОПТИМУМ("ОПТИМУМ", Arrays.asList("оптимум")),
     ПРИВЕДИ_ДРУГА("ПРИВЕДИ ДРУГА", Arrays.asList("пд")),
     УТИЛИЗАЦИЯ_НС("УТИЛИЗАЦИЯ НС", Arrays.asList("утиль нс", "унс")),
+    НС("НС", Arrays.asList("накопительный", "накопительный счет", "нс", "накопительный")),
     РЕФИНАНСИРОВАНИЕ("РЕФИНАНСИРОВАНИЕ", Arrays.asList("реф", "рефинанс", "рефинансирование")),
     ИНВЕСТИЦИИ_УТИЛИЗАЦИЯ_БС("ИНВЕСТИЦИИ УТИЛИЗАЦИЯ БС", Arrays.asList("инвест утиль", "утиль инвест")),
     МП_ИНВЕСТИЦИИ("МП ИНВЕСТИЦИИ", Arrays.asList("мп инвест")),
@@ -47,10 +47,12 @@ public enum OfferType {
     }
 
     // Найти оффер по алиасу
+
     public static OfferType findByAlias(String alias) {
         String searchKey = alias.trim().toLowerCase();
         return Arrays.stream(values())
-                .filter(offer -> offer.getAliases().contains(searchKey))
+                .filter(offer -> offer.getAliases().stream()
+                        .anyMatch(offerAlias -> offerAlias.equals(searchKey)))
                 .findFirst()
                 .orElse(null);
     }
